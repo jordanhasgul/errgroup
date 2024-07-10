@@ -81,13 +81,11 @@ func (g *Group) Go(f func() error) error {
 		err := f()
 		if err != nil {
 			// https://en.wikipedia.org/wiki/Double-checked_locking
-			cancelled := g.cancelled.Load()
-			if !cancelled {
+			if !g.cancelled.Load() {
 				g.errLock.Lock()
 				defer g.errLock.Unlock()
 
-				cancelled = g.cancelled.Load()
-				if !cancelled {
+				if !g.cancelled.Load() {
 					if g.cancel != nil {
 						g.cancel()
 						g.cancelled.Store(true)
