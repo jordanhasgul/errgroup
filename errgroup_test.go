@@ -72,7 +72,7 @@ func TestGroup_Go(t *testing.T) {
 	})
 
 	t.Run("with cancel", func(t *testing.T) {
-		//t.Parallel()
+		t.Parallel()
 
 		var (
 			ctx, configurer = errgroup.WithCancel(context.Background())
