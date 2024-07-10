@@ -57,6 +57,9 @@ func TestGroup_Go(t *testing.T) {
 				return fmt.Errorf("error %d", i)
 			})
 			require.Error(t, err)
+
+			var le *errgroup.LimitError
+			require.ErrorAs(t, err, &le)
 		}
 
 		for range maxFuncs {
@@ -75,8 +78,8 @@ func TestGroup_Go(t *testing.T) {
 		t.Parallel()
 
 		var (
-			ctx, configurer = errgroup.WithCancel(context.Background())
-			eg              = errgroup.New(configurer)
+			_, configurer = errgroup.WithCancel(context.Background())
+			eg            = errgroup.New(configurer)
 		)
 		for i := range numFuncs {
 			err := eg.Go(func() error {
@@ -87,11 +90,18 @@ func TestGroup_Go(t *testing.T) {
 
 		err := eg.Wait()
 		require.Error(t, err)
-		require.ErrorIs(t, ctx.Err(), context.Canceled)
 
 		var e *multierr.Error
 		require.ErrorAs(t, err, &e)
 		require.Equal(t, 1, e.Len())
+
+		err = eg.Go(func() error {
+			return fmt.Errorf("error %d", numFuncs)
+		})
+		require.Error(t, err)
+
+		var ce *errgroup.CancelError
+		require.ErrorAs(t, err, &ce)
 	})
 }
 
