@@ -1,5 +1,5 @@
-// Package errgroup is a Go package that provides synchronisation and
-// error propagation for goroutines running fallible functions.
+// Package errgroup is a Go package that provides synchronisation and error
+// propagation for goroutines running fallible functions.
 package errgroup
 
 import (
@@ -52,12 +52,26 @@ func (e LimitError) Error() string {
 	return fmt.Sprintf(errorString, e.limit)
 }
 
+// CancelError indicates that a Group has been cancelled.
+type CancelError struct{}
+
+var _ error = (*CancelError)(nil)
+
+func (c CancelError) Error() string {
+	return "group has been cancelled"
+}
+
 // Go tries to launch the fallible function f in another goroutine. If it
 // could not, Go returns an error explaining why:
 //
-//   - LimitError if launching f in another goroutine would cause the number
-//     of goroutines to exceed the Group's limit.
+//   - A CancelError if the Group has been cancelled.
+//   - A LimitError if launching f in another goroutine would cause the
+//     number of goroutines to exceed the Group's limit.
 func (g *Group) Go(f func() error) error {
+	if g.cancelled.Load() {
+		return &CancelError{}
+	}
+
 	if g.semaphore != nil {
 		select {
 		case g.semaphore <- struct{}{}:
