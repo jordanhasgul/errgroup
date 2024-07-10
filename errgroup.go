@@ -1,3 +1,5 @@
+// Package errgroup is a Go package that provides synchronisation and
+// error propagation for goroutines running fallible functions.
 package errgroup
 
 import (
@@ -9,6 +11,7 @@ import (
 	"github.com/jordanhasgul/multierr"
 )
 
+// Group manages the execution of goroutines that run fallible functions.
 type Group struct {
 	semaphore chan struct{}
 	wg        sync.WaitGroup
@@ -20,10 +23,14 @@ type Group struct {
 	err     error
 }
 
+// Configurer is implemented by any type that has a configure method. The
+// configure method is used to configure the behaviour of a Group.
 type Configurer interface {
 	configure(*Group)
 }
 
+// New returns a new Group that has been configured by applying any supplied
+// configurers.
 func New(configurers ...Configurer) *Group {
 	group := &Group{}
 	for _, configurer := range configurers {
@@ -33,6 +40,7 @@ func New(configurers ...Configurer) *Group {
 	return group
 }
 
+// LimitError indicates that a Group has reached its limit.
 type LimitError struct {
 	limit int
 }
@@ -44,6 +52,11 @@ func (e LimitError) Error() string {
 	return fmt.Sprintf(errorString, e.limit)
 }
 
+// Go tries to launch the fallible function f in another goroutine. If it
+// could not, Go returns an error explaining why:
+//
+//   - LimitError if launching f in another goroutine would cause the number
+//     of goroutines to exceed the Group's limit.
 func (g *Group) Go(f func() error) error {
 	if g.semaphore != nil {
 		select {
@@ -89,6 +102,9 @@ func (g *Group) Go(f func() error) error {
 	return nil
 }
 
+// Wait blocks until all goroutines managed by the Group have finished
+// executing and returns an error that aggregates any errors that occurred
+// within each goroutine.
 func (g *Group) Wait() error {
 	g.wg.Wait()
 
@@ -108,6 +124,10 @@ func (c cancelConfigurer) configure(group *Group) {
 	group.cancel = c.cancel
 }
 
+// WithCancel returns context.Context derived from ctx and a Configurer. The
+// returned Configurer configures a Group to cancel the derived
+// context.Context the first time a fallible function passed to Group.Go
+// returns a non-nil error.
 func WithCancel(ctx context.Context) (context.Context, Configurer) {
 	ctx, cancel := context.WithCancel(ctx)
 	return ctx, &cancelConfigurer{cancel}
@@ -128,6 +148,8 @@ func (c limitConfigurer) configure(group *Group) {
 	group.semaphore = make(chan struct{}, c.limit)
 }
 
+// WithLimit returns a Configurer that configures a Group to keep the number
+// of goroutines managed by the Group at or below the limit.
 func WithLimit(limit int) Configurer {
 	return &limitConfigurer{limit: limit}
 }
