@@ -48,7 +48,7 @@ type LimitError struct {
 var _ error = (*LimitError)(nil)
 
 func (e LimitError) Error() string {
-	errorString := "errgroup has reached the limit of %d goroutines"
+	errorString := "group has reached the limit of %d goroutines"
 	return fmt.Sprintf(errorString, e.limit)
 }
 
