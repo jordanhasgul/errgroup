@@ -61,7 +61,7 @@ func (g *Group) Go(f func() error) error {
 			g.wg.Done()
 
 			if g.semaphore != nil {
-				<-g.semaphore
+				_ = <-g.semaphore
 			}
 		}()
 
