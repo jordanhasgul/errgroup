@@ -101,7 +101,9 @@ func BenchmarkGroup_Go(b *testing.B) {
 
 	var (
 		eg errgroup.Group
-		f  = func() error { return nil }
+		f  = func() error {
+			return nil
+		}
 	)
 	for range b.N {
 		_ = eg.Go(f)
