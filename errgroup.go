@@ -68,7 +68,7 @@ func (c CancelError) Error() string {
 //   - A LimitError if launching f in another goroutine would cause the
 //     number of goroutines to exceed the Group's limit.
 func (g *Group) Go(f func() error) error {
-	if g.cancelled.Load() {
+	if g.cancel != nil && g.cancelled.Load() {
 		return &CancelError{}
 	}
 
@@ -95,17 +95,14 @@ func (g *Group) Go(f func() error) error {
 		err := f()
 		if err != nil {
 			// https://en.wikipedia.org/wiki/Double-checked_locking
-			if !g.cancelled.Load() {
+			if g.cancel != nil && !g.cancelled.Load() {
 				g.errLock.Lock()
 				defer g.errLock.Unlock()
 
-				if !g.cancelled.Load() {
-					if g.cancel != nil {
-						g.cancel()
-						g.cancelled.Store(true)
-					}
-
+				if g.cancel != nil && !g.cancelled.Load() {
+					g.cancel()
 					g.err = multierr.Append(g.err, err)
+					g.cancelled.Store(true)
 				}
 			}
 		}
