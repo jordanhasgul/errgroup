@@ -66,7 +66,7 @@ func (c CancelError) Error() string {
 //
 //   - A CancelError if the Group has been cancelled.
 //   - A LimitError if launching f in another goroutine would cause the
-//     number of goroutines to exceed the Group's limit.
+//     number of goroutines managed by the Group to exceed its limit.
 func (g *Group) Go(f func() error) error {
 	if g.cancelled.Load() {
 		return &CancelError{}
