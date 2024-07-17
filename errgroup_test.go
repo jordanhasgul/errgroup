@@ -12,8 +12,8 @@ import (
 
 func TestGroup_Go(t *testing.T) {
 	const (
-		numFuncs int = 5
-		maxFuncs int = 3
+		numFuncs uint = 5
+		maxFuncs uint = 3
 	)
 
 	t.Run("default", func(t *testing.T) {
@@ -32,7 +32,9 @@ func TestGroup_Go(t *testing.T) {
 
 		var e *multierr.Error
 		require.ErrorAs(t, err, &e)
-		require.Equal(t, numFuncs, e.Len())
+
+		numErrors := uint(e.Len())
+		require.Equal(t, numFuncs, numErrors)
 	})
 
 	t.Run("with limit", func(t *testing.T) {
@@ -71,7 +73,9 @@ func TestGroup_Go(t *testing.T) {
 
 		var e *multierr.Error
 		require.ErrorAs(t, err, &e)
-		require.Equal(t, maxFuncs, e.Len())
+
+		numErrors := uint(e.Len())
+		require.Equal(t, maxFuncs, numErrors)
 	})
 
 	t.Run("with cancel", func(t *testing.T) {

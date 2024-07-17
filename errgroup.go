@@ -13,11 +13,10 @@ import (
 
 // Group manages the execution of goroutines that run fallible functions.
 type Group struct {
-	semaphore chan struct{}
 	wg        sync.WaitGroup
-
-	cancelled atomic.Bool
+	semaphore chan struct{}
 	cancel    context.CancelFunc
+	cancelled atomic.Bool
 
 	errLock sync.Mutex
 	err     error
@@ -94,24 +93,25 @@ func (g *Group) Go(f func() error) error {
 
 		err := f()
 		if err != nil {
-			// https://en.wikipedia.org/wiki/Double-checked_locking
-			if !g.cancelled.Load() {
-				g.errLock.Lock()
-				defer g.errLock.Unlock()
-
-				if !g.cancelled.Load() {
-					if g.cancel != nil {
-						g.cancel()
-						g.cancelled.Store(true)
-					}
-
-					g.err = multierr.Append(g.err, err)
-				}
-			}
+			g.handleError(err)
 		}
 	}()
 
 	return nil
+}
+
+func (g *Group) handleError(err error) {
+	g.errLock.Lock()
+	defer g.errLock.Unlock()
+
+	if !g.cancelled.Load() {
+		if g.cancel != nil {
+			g.cancelled.Store(true)
+			g.cancel()
+		}
+
+		g.err = multierr.Append(g.err, err)
+	}
 }
 
 // Wait blocks until all goroutines managed by the Group have finished
@@ -122,7 +122,6 @@ func (g *Group) Wait() error {
 
 	g.errLock.Lock()
 	defer g.errLock.Unlock()
-
 	return g.err
 }
 
@@ -146,22 +145,17 @@ func WithCancel(ctx context.Context) (context.Context, Configurer) {
 }
 
 type limitConfigurer struct {
-	limit int
+	limit uint
 }
 
 var _ Configurer = (*limitConfigurer)(nil)
 
 func (c limitConfigurer) configure(group *Group) {
-	if c.limit < 0 {
-		group.semaphore = nil
-		return
-	}
-
 	group.semaphore = make(chan struct{}, c.limit)
 }
 
 // WithLimit returns a Configurer that configures a Group to keep the number
 // of goroutines managed by the Group at or below the limit.
-func WithLimit(limit int) Configurer {
+func WithLimit(limit uint) Configurer {
 	return &limitConfigurer{limit: limit}
 }
