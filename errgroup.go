@@ -60,8 +60,8 @@ func (c CancelError) Error() string {
 	return "group has been cancelled"
 }
 
-// Go tries to launch the fallible function f in another goroutine. If it
-// could not, Go returns an error explaining why:
+// Go tries to launch f in another goroutine. If it could not, Go returns
+// an error explaining why:
 //
 //   - A CancelError if the Group has been cancelled.
 //   - A LimitError if launching f in another goroutine would cause the
