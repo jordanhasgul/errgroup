@@ -2,6 +2,7 @@ package errgroup_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -115,9 +116,9 @@ func BenchmarkGroup_Go(b *testing.B) {
 
 	var (
 		eg errgroup.Group
-		f  = func() error {
-			return nil
-		}
+
+		err = errors.New("some error")
+		f   = func() error { return err }
 	)
 	for range b.N {
 		_ = eg.Go(f)
