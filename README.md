@@ -29,13 +29,16 @@ var (
 
 ### Using an errgroup
 
-Once you've created an `errgroup.Group`, you can begin using it to run fallible functions as follows:  
+Once you've created an `errgroup.Group`, you can begin using it by calling `errgroup.Group.Go` (or
+`errgroup.Group.TryGo`). Then, `errgroup.Group.Wait` for the result:  
 
 ```go
-for i := range 10 {
-    _ = eg.Go(func() error {
-        return fmt.Errorf("error %d", i)
-    })
+var fs []func() error
+//
+// ...
+//
+for _, f := range fs {
+    _ = eg.Go(f)
 }
 
 errs := eg.Wait()
