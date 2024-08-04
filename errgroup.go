@@ -11,12 +11,13 @@ import (
 	"github.com/jordanhasgul/multierr"
 )
 
-// Group manages the execution of goroutines that run fallible functions.
+// Group manages the execution of goroutines that run functions of type
+// func() error.
 type Group struct {
-	wg        sync.WaitGroup
 	semaphore chan struct{}
-	cancel    context.CancelFunc
+	wg        sync.WaitGroup
 	cancelled atomic.Bool
+	cancel    context.CancelFunc
 
 	errLock sync.Mutex
 	err     error
@@ -60,13 +61,30 @@ func (c CancelError) Error() string {
 	return "group has been cancelled"
 }
 
-// Go tries to launch f in another goroutine. If it could not, Go returns
-// an error explaining why:
+// Go launch f in another goroutine. It blocks until the new goroutine can
+// be added without causing number of goroutines managed by the Group to
+// exceed its limit. If the Group has been cancelled, a CancelError is
+// returned.
+func (g *Group) Go(f func() error) error {
+	if g.cancelled.Load() {
+		return &CancelError{}
+	}
+
+	if g.semaphore != nil {
+		g.semaphore <- struct{}{}
+	}
+
+	g.doGo(f)
+	return nil
+}
+
+// TryGo tries to launch f in another goroutine. If it could not, TryGo
+// returns an error explaining why:
 //
 //   - A CancelError if the Group has been cancelled.
 //   - A LimitError if launching f in another goroutine would cause the
 //     number of goroutines managed by the Group to exceed its limit.
-func (g *Group) Go(f func() error) error {
+func (g *Group) TryGo(f func() error) error {
 	if g.cancelled.Load() {
 		return &CancelError{}
 	}
@@ -81,6 +99,11 @@ func (g *Group) Go(f func() error) error {
 		}
 	}
 
+	g.doGo(f)
+	return nil
+}
+
+func (g *Group) doGo(f func() error) {
 	g.wg.Add(1)
 	go func() {
 		defer func() {
@@ -96,22 +119,21 @@ func (g *Group) Go(f func() error) error {
 			g.handleError(err)
 		}
 	}()
-
-	return nil
 }
 
 func (g *Group) handleError(err error) {
-	g.errLock.Lock()
-	defer g.errLock.Unlock()
-
-	if !g.cancelled.Load() {
-		if g.cancel != nil {
-			g.cancelled.Store(true)
-			g.cancel()
+	if g.cancel != nil {
+		shouldCancel := g.cancelled.CompareAndSwap(false, true)
+		if !shouldCancel {
+			return
 		}
 
-		g.err = multierr.Append(g.err, err)
+		g.cancel()
 	}
+
+	g.errLock.Lock()
+	defer g.errLock.Unlock()
+	g.err = multierr.Append(g.err, err)
 }
 
 // Wait blocks until all goroutines managed by the Group have finished
@@ -137,8 +159,8 @@ func (c cancelConfigurer) configure(group *Group) {
 
 // WithCancel returns context.Context derived from ctx and a Configurer. The
 // returned Configurer configures a Group to cancel the derived
-// context.Context the first time a fallible function passed to Group.Go
-// returns a non-nil error.
+// context.Context the first time a function passed to Group.Go returns a
+// non-nil error.
 func WithCancel(ctx context.Context) (context.Context, Configurer) {
 	ctx, cancel := context.WithCancel(ctx)
 	return ctx, &cancelConfigurer{cancel}
