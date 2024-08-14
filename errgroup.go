@@ -1,4 +1,4 @@
-// Package errgroup is a Go package that provides synchronisation and error
+// Package errgroup is a Go package that provides synchronisation, Context cancellation and error
 // propagation for goroutines running fallible functions.
 package errgroup
 
@@ -159,8 +159,10 @@ func (c cancelConfigurer) configure(group *Group) {
 
 // WithCancel returns context.Context derived from ctx and a Configurer. The
 // returned Configurer configures a Group to cancel the derived
-// context.Context the first time a function passed to Group.Go returns a
-// non-nil error.
+// context.Context when:
+//
+//   - The first time a function passed to Group.Go returns a non-nil error.
+//   - The first time a call to Group.Wait returns.
 func WithCancel(ctx context.Context) (context.Context, Configurer) {
 	ctx, cancel := context.WithCancel(ctx)
 	return ctx, &cancelConfigurer{cancel}
