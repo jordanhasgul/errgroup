@@ -116,24 +116,17 @@ func (g *Group) doGo(f func() error) {
 
 		err := f()
 		if err != nil {
-			g.handleError(err)
+			if !g.cancelled.Load() {
+				if g.cancel != nil {
+					g.cancel()
+				}
+
+				g.errLock.Lock()
+				defer g.errLock.Unlock()
+				g.err = multierr.Append(g.err, err)
+			}
 		}
 	}()
-}
-
-func (g *Group) handleError(err error) {
-	if g.cancel != nil {
-		shouldCancel := g.cancelled.CompareAndSwap(false, true)
-		if !shouldCancel {
-			return
-		}
-
-		g.cancel()
-	}
-
-	g.errLock.Lock()
-	defer g.errLock.Unlock()
-	g.err = multierr.Append(g.err, err)
 }
 
 // Wait blocks until all goroutines managed by the Group have finished
@@ -141,6 +134,10 @@ func (g *Group) handleError(err error) {
 // within each goroutine.
 func (g *Group) Wait() error {
 	g.wg.Wait()
+
+	if g.cancel != nil {
+		g.cancel()
+	}
 
 	g.errLock.Lock()
 	defer g.errLock.Unlock()
@@ -154,7 +151,10 @@ type cancelConfigurer struct {
 var _ Configurer = (*cancelConfigurer)(nil)
 
 func (c cancelConfigurer) configure(group *Group) {
-	group.cancel = c.cancel
+	group.cancel = func() {
+		group.cancelled.Store(true)
+		c.cancel()
+	}
 }
 
 // WithCancel returns context.Context derived from ctx and a Configurer. The
