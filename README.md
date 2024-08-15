@@ -2,7 +2,7 @@
 
 ## Overview
 
-`errgroup` is a Go module that provides synchronisation, Context cancellation and error propagation 
+`errgroup` is a Go module that provides Context cancellation, error propagation and synchronisation 
 for goroutines running fallible functions.
 
 ## Usage
