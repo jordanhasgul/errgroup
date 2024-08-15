@@ -1,5 +1,5 @@
-// Package errgroup is a Go package that provides synchronisation, Context cancellation and error
-// propagation for goroutines running fallible functions.
+// Package errgroup is a Go package that provides Context cancellation, error propagation and 
+// synchronisation for goroutines running fallible functions.
 package errgroup
 
 import (
