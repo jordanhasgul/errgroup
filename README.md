@@ -22,21 +22,20 @@ the `errgroup.New` function and supply some `errgroup.Configurer`'s:
 ```go
 var (
     ctx, cc = errgroup.WithCancel(ctx.Background())
-    lc      = errgroup.WithLimit(10)
-    eg      = errgroup.New(cc, lc)
+    eg      = errgroup.New(cc)
 )
 ```
 
 ### Using an errgroup
 
-Once you've created an `errgroup.Group`, you can begin using it by calling `errgroup.Group.Go` (or
-`errgroup.Group.TryGo`). Then, `errgroup.Group.Wait` for the result:  
+Once you've created an `errgroup.Group`, you can begin using it by calling `errgroup.Group.Go`. Then, 
+`errgroup.Group.Wait` for the result:  
 
 ```go
 var fs []func() error
-//
+
 // ...
-//
+
 for _, f := range fs {
     _ = eg.Go(f)
 }

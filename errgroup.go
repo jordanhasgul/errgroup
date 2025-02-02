@@ -113,7 +113,7 @@ func (c runnerConfigurer) configure(g *Group) {
 }
 
 // WithRunner returns a Configurer that configures a Group to run every f
-// supplied to Group.Go using the supplied runner.
+// supplied to Group.Go using the supplied Runner.
 func WithRunner(runner Runner) Configurer {
 	return &runnerConfigurer{runner: runner}
 }
