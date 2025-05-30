@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/jordanhasgul/errgroup"
@@ -11,75 +12,152 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var numGoroutines = 4 * runtime.NumCPU()
+
 func TestGroup_Go(t *testing.T) {
-	const numGoroutines = 1 << 4
+	t.Run("all goroutines succeed so return a nil error", func(t *testing.T) {
+		var eg errgroup.Group
+		for range numGoroutines {
+			err := eg.Go(func() error {
+				return nil
+			})
+			require.NoError(t, err)
+		}
 
-	var eg errgroup.Group
-	for i := range numGoroutines {
-		err := eg.Go(func() error {
-			return fmt.Errorf("error %d", i)
-		})
+		err := eg.Wait()
 		require.NoError(t, err)
-	}
+	})
 
-	err := eg.Wait()
-	require.Error(t, err)
+	t.Run("at least 1 goroutine fails so return a non-nil error", func(t *testing.T) {
+		var eg errgroup.Group
+		for i := range numGoroutines {
+			err := eg.Go(func() error {
+				return fmt.Errorf("error %d", i)
+			})
+			require.NoError(t, err)
+		}
 
-	var e *multierr.Error
-	require.ErrorAs(t, err, &e)
-	require.Equal(t, numGoroutines, e.Len())
+		err := eg.Wait()
+		require.Error(t, err)
+
+		var e *multierr.Error
+		require.ErrorAs(t, err, &e)
+		require.Equal(t, e.Len(), numGoroutines)
+	})
 }
 
 func TestGroup_GoWithCancel(t *testing.T) {
-	const numGoroutines = 1 << 4
+	t.Run("all goroutines succeed so return a nil error", func(t *testing.T) {
+		var (
+			ctx   = context.Background()
+			_, cc = errgroup.WithCancel(ctx)
+			eg    = errgroup.New(cc)
+		)
+		for range numGoroutines {
+			err := eg.Go(func() error {
+				return nil
+			})
+			require.NoError(t, err)
+		}
 
-	var (
-		ctx   = context.Background()
-		_, cc = errgroup.WithCancel(ctx)
-		eg    = errgroup.New(cc)
-
-		barrier = make(chan struct{})
-	)
-	for i := range numGoroutines {
-		err := eg.Go(func() error {
-			barrier <- struct{}{}
-			return fmt.Errorf("error %d", i)
-		})
+		err := eg.Wait()
 		require.NoError(t, err)
-	}
-
-	for range numGoroutines {
-		_ = <-barrier
-	}
-
-	err := eg.Wait()
-	require.Error(t, err)
-
-	var e *multierr.Error
-	require.ErrorAs(t, err, &e)
-	require.Equal(t, 1, e.Len())
-
-	err = eg.Go(func() error {
-		return errors.New("another error")
 	})
-	require.Error(t, err)
 
-	var ce *errgroup.CancelError
-	require.ErrorAs(t, err, &ce)
+	t.Run("all goroutines succeed so group is cancelled", func(t *testing.T) {
+		var (
+			ctx   = context.Background()
+			_, cc = errgroup.WithCancel(ctx)
+			eg    = errgroup.New(cc)
+		)
+		for range numGoroutines {
+			err := eg.Go(func() error {
+				return nil
+			})
+			require.NoError(t, err)
+		}
+
+		_ = eg.Wait()
+
+		err := eg.Go(func() error {
+			return nil
+		})
+		require.Error(t, err)
+
+		var ce *errgroup.CancelError
+		require.ErrorAs(t, err, &ce)
+	})
+
+	t.Run("at least 1 goroutine fails so return a non-nil error", func(t *testing.T) {
+		var (
+			ctx   = context.Background()
+			_, cc = errgroup.WithCancel(ctx)
+			eg    = errgroup.New(cc)
+
+			barrier = make(chan struct{})
+		)
+		for i := range numGoroutines {
+			err := eg.Go(func() error {
+				barrier <- struct{}{}
+				return fmt.Errorf("error %d", i)
+			})
+			require.NoError(t, err)
+		}
+
+		for range numGoroutines {
+			_ = <-barrier
+		}
+
+		err := eg.Wait()
+		require.Error(t, err)
+
+		var e *multierr.Error
+		require.ErrorAs(t, err, &e)
+		require.Equal(t, 1, e.Len())
+	})
+
+	t.Run("at least 1 goroutine fails so group is cancelled", func(t *testing.T) {
+		var (
+			ctx   = context.Background()
+			_, cc = errgroup.WithCancel(ctx)
+			eg    = errgroup.New(cc)
+
+			barrier = make(chan struct{})
+		)
+		for i := range numGoroutines {
+			err := eg.Go(func() error {
+				barrier <- struct{}{}
+				return fmt.Errorf("error %d", i)
+			})
+			require.NoError(t, err)
+		}
+
+		for range numGoroutines {
+			_ = <-barrier
+		}
+
+		_ = eg.Wait()
+
+		err := eg.Go(func() error {
+			return errors.New("another error")
+		})
+		require.Error(t, err)
+
+		var ce *errgroup.CancelError
+		require.ErrorAs(t, err, &ce)
+	})
 }
 
 type testRunner struct {
-	runner errgroup.Runner
-	runs   int
+	runs int
 }
 
 func (r *testRunner) Run(f func()) error {
-	return r.runner.Run(func() {
-		defer func() {
-			r.runs++
-		}()
-		f()
-	})
+	defer func() {
+		r.runs++
+	}()
+	f()
+	return nil
 }
 
 func (r *testRunner) Runs() int {
@@ -87,14 +165,10 @@ func (r *testRunner) Runs() int {
 }
 
 func TestGroup_GoWithRunner(t *testing.T) {
-	const numGoroutines = 1 << 4
-
 	var (
-		r = &testRunner{
-			runner: &errgroup.GoRunner{},
-			runs:   0,
-		}
-		rc = errgroup.WithRunner(r)
+		r testRunner
+
+		rc = errgroup.WithRunner(&r)
 		eg = errgroup.New(rc)
 	)
 	for i := range numGoroutines {
