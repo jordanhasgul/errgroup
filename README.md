@@ -16,8 +16,8 @@ a `errgroup.Group` as follows and begin using it:
 var eg errgroup.Group
 ```
 
-However, if you would like to construct an `errgroup.Group` from some configuration, you can use 
-the `errgroup.New` function and supply some `errgroup.Configurer`'s:
+You can also configure the behaviour of an `errgroup.Group` by providing some `errgroup.Configurer`'s to the 
+`errgroup.New` function. For example:
 
 ```go
 var (
@@ -28,8 +28,8 @@ var (
 
 ### Using an errgroup
 
-Once you've created an `errgroup.Group`, you can begin using it by calling `errgroup.Group.Go`. Then, 
-`errgroup.Group.Wait` for the result:  
+Once you have created an `errgroup.Group`, you can begin using it by calling `errgroup.Group.Go`. Then, 
+you can call `errgroup.Group.Wait` to wait for the result:  
 
 ```go
 var fs []func() error
