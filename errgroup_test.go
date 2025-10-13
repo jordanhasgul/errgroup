@@ -105,7 +105,7 @@ func TestGroup_GoWithCancel(t *testing.T) {
 		}
 
 		for range numGoroutines {
-			_ = <-barrier
+			<-barrier
 		}
 
 		err := eg.Wait()
@@ -133,7 +133,7 @@ func TestGroup_GoWithCancel(t *testing.T) {
 		}
 
 		for range numGoroutines {
-			_ = <-barrier
+			<-barrier
 		}
 
 		_ = eg.Wait()
