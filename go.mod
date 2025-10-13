@@ -1,6 +1,6 @@
 module github.com/jordanhasgul/errgroup
 
-go 1.22.2
+go 1.25.0
 
 require (
 	github.com/jordanhasgul/multierr v0.0.0-20240628130404-f83f3ec8e591
