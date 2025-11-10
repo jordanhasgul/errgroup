@@ -64,13 +64,13 @@ func (g *Group) Go(f func() error) error {
 		err := f()
 		if err != nil {
 			if !g.cancelled.Load() {
+				g.errLock.Lock()
+				defer g.errLock.Unlock()
+
+				g.err = multierr.Append(g.err, err)
 				if g.cancel != nil {
 					g.cancel()
 				}
-
-				g.errLock.Lock()
-				defer g.errLock.Unlock()
-				g.err = multierr.Append(g.err, err)
 			}
 		}
 	})
