@@ -9,6 +9,7 @@ import (
 
 	"github.com/jordanhasgul/errgroup"
 	"github.com/jordanhasgul/multierr"
+	"github.com/jordanhasgul/rendezvous"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,18 +95,16 @@ func TestGroup_GoWithCancel(t *testing.T) {
 			_, cc = errgroup.WithCancel(ctx)
 			eg    = errgroup.New(cc)
 
-			barrier = make(chan struct{})
+			point = rendezvous.NewPoint(numGoroutines)
 		)
 		for i := range numGoroutines {
 			err := eg.Go(func() error {
-				barrier <- struct{}{}
+				err := point.Regroup(ctx)
+				require.NoError(t, err)
+
 				return fmt.Errorf("error %d", i)
 			})
 			require.NoError(t, err)
-		}
-
-		for range numGoroutines {
-			<-barrier
 		}
 
 		err := eg.Wait()
@@ -122,23 +121,22 @@ func TestGroup_GoWithCancel(t *testing.T) {
 			_, cc = errgroup.WithCancel(ctx)
 			eg    = errgroup.New(cc)
 
-			barrier = make(chan struct{})
+			point = rendezvous.NewPoint(numGoroutines)
 		)
 		for i := range numGoroutines {
 			err := eg.Go(func() error {
-				barrier <- struct{}{}
+				err := point.Regroup(ctx)
+				require.NoError(t, err)
+
 				return fmt.Errorf("error %d", i)
 			})
 			require.NoError(t, err)
 		}
 
-		for range numGoroutines {
-			<-barrier
-		}
+		err := eg.Wait()
+		require.Error(t, err)
 
-		_ = eg.Wait()
-
-		err := eg.Go(func() error {
+		err = eg.Go(func() error {
 			return errors.New("another error")
 		})
 		require.Error(t, err)
@@ -149,15 +147,15 @@ func TestGroup_GoWithCancel(t *testing.T) {
 }
 
 type testRunner struct {
-	runs int
+	runs     int
+	goRunner errgroup.GoRunner
 }
 
 func (r *testRunner) Run(f func()) error {
 	defer func() {
 		r.runs++
 	}()
-	f()
-	return nil
+	return r.goRunner.Run(f)
 }
 
 func (r *testRunner) Runs() int {

@@ -4,8 +4,8 @@ package errgroup
 
 import (
 	"context"
+	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/jordanhasgul/multierr"
 )
@@ -16,11 +16,11 @@ type Group struct {
 	wg     sync.WaitGroup
 	runner Runner
 
-	cancel    context.CancelFunc
-	cancelled atomic.Bool
+	lock sync.Mutex
 
-	errLock sync.Mutex
-	err     error
+	err       error
+	cancel    context.CancelFunc
+	cancelled bool
 }
 
 // Configurer configures the behaviour of a Group.
@@ -53,27 +53,35 @@ func (g *Group) Go(f func() error) error {
 		g.runner = &GoRunner{}
 	}
 
-	if g.cancelled.Load() {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	if g.cancelled {
 		return &CancelError{}
 	}
 
 	g.wg.Add(1)
-	return g.runner.Run(func() {
+	err := g.runner.Run(func() {
 		defer g.wg.Done()
 
 		err := f()
 		if err != nil {
-			if !g.cancelled.Load() {
+			g.lock.Lock()
+			defer g.lock.Unlock()
+
+			if !g.cancelled {
+				g.err = multierr.Append(g.err, err)
 				if g.cancel != nil {
 					g.cancel()
 				}
-
-				g.errLock.Lock()
-				defer g.errLock.Unlock()
-				g.err = multierr.Append(g.err, err)
 			}
 		}
 	})
+	if err != nil {
+		return fmt.Errorf("trying to run f: %w", err)
+	}
+
+	return nil
 }
 
 // Wait blocks until the Group has run every f supplied to Group.Go and
@@ -81,16 +89,17 @@ func (g *Group) Go(f func() error) error {
 func (g *Group) Wait() error {
 	g.wg.Wait()
 
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
 	if g.cancel != nil {
 		g.cancel()
 	}
 
-	g.errLock.Lock()
-	defer g.errLock.Unlock()
 	return g.err
 }
 
-// Runner runs f in a goroutine.
+// Runner runs f in a separate goroutine.
 type Runner interface {
 	Run(f func()) error
 }
@@ -124,7 +133,7 @@ type cancelConfigurer struct {
 
 func (c cancelConfigurer) configure(group *Group) {
 	group.cancel = func() {
-		group.cancelled.Store(true)
+		group.cancelled = true
 		c.cancel()
 	}
 }
