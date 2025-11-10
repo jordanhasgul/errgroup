@@ -5,7 +5,6 @@ package errgroup
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
 	"github.com/jordanhasgul/multierr"
 )
@@ -16,11 +15,11 @@ type Group struct {
 	wg     sync.WaitGroup
 	runner Runner
 
-	cancel    context.CancelFunc
-	cancelled atomic.Bool
+	lock sync.Mutex
 
-	errLock sync.Mutex
-	err     error
+	err       error
+	cancel    context.CancelFunc
+	cancelled bool
 }
 
 // Configurer configures the behaviour of a Group.
@@ -53,7 +52,10 @@ func (g *Group) Go(f func() error) error {
 		g.runner = &GoRunner{}
 	}
 
-	if g.cancelled.Load() {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
+	if g.cancelled {
 		return &CancelError{}
 	}
 
@@ -63,10 +65,9 @@ func (g *Group) Go(f func() error) error {
 
 		err := f()
 		if err != nil {
-			if !g.cancelled.Load() {
-				g.errLock.Lock()
-				defer g.errLock.Unlock()
-
+			g.lock.Lock()
+			defer g.lock.Unlock()
+			if !g.cancelled {
 				g.err = multierr.Append(g.err, err)
 				if g.cancel != nil {
 					g.cancel()
@@ -85,8 +86,8 @@ func (g *Group) Wait() error {
 		g.cancel()
 	}
 
-	g.errLock.Lock()
-	defer g.errLock.Unlock()
+	g.lock.Lock()
+	defer g.lock.Unlock()
 	return g.err
 }
 
@@ -124,7 +125,7 @@ type cancelConfigurer struct {
 
 func (c cancelConfigurer) configure(group *Group) {
 	group.cancel = func() {
-		group.cancelled.Store(true)
+		group.cancelled = true
 		c.cancel()
 	}
 }
