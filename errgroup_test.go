@@ -147,15 +147,15 @@ func TestGroup_GoWithCancel(t *testing.T) {
 }
 
 type testRunner struct {
-	runs int
+	runs     int
+	goRunner errgroup.GoRunner
 }
 
 func (r *testRunner) Run(f func()) error {
 	defer func() {
 		r.runs++
 	}()
-	f()
-	return nil
+	return r.goRunner.Run(f)
 }
 
 func (r *testRunner) Runs() int {
