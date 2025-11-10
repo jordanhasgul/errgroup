@@ -4,7 +4,8 @@ go 1.25.0
 
 require (
 	github.com/jordanhasgul/multierr v0.0.0-20240628130404-f83f3ec8e591
-	github.com/stretchr/testify v1.9.0
+	github.com/jordanhasgul/rendezvous v0.0.0-20251107130938-2b1443ec76b0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
