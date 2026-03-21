@@ -49,12 +49,12 @@ func (c CancelError) Error() string {
 // Go runs f according to the semantics of the Group's Runner, or it returns
 // a CancelError if the Group has been cancelled.
 func (g *Group) Go(f func() error) error {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+
 	if g.runner == nil {
 		g.runner = &GoRunner{}
 	}
-
-	g.lock.Lock()
-	defer g.lock.Unlock()
 
 	if g.cancelled {
 		return &CancelError{}
